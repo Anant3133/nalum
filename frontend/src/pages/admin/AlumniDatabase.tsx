@@ -65,6 +65,9 @@ const AlumniDatabase = () => {
   const [hasSearched, setHasSearched] = useState(false);
 
   // Database view state
+  const [batches, setBatches] = useState<string[]>([]);
+  const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
+  const [loadingBatches, setLoadingBatches] = useState(false);
   const [allAlumni, setAllAlumni] = useState<AlumniRecord[]>([]);
   const [loadingAll, setLoadingAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -153,17 +156,74 @@ const AlumniDatabase = () => {
     }
   };
 
-  // Load alumni when tab changes to database view
+  // Fetch all batches
+  const fetchBatches = async () => {
+    setLoadingBatches(true);
+    try {
+      const response = await api.get("/admin/alumni-batches", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (response.data.success) {
+        setBatches(response.data.batches || []);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      const message = axiosError.response?.data?.message || "Failed to fetch batches";
+      toast.error(message);
+    } finally {
+      setLoadingBatches(false);
+    }
+  };
+
+  // Fetch alumni by batch
+  const fetchAlumniByBatch = async (batch: string, page: number = 1) => {
+    setLoadingAll(true);
+    try {
+      const offset = (page - 1) * limit;
+      const response = await api.get(`/admin/alumni-by-batch/${batch}`, {
+        params: { limit, offset },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (response.data.success) {
+        setAllAlumni(response.data.matches || []);
+        setTotalRecords(response.data.total || 0);
+        setCurrentPage(page);
+        setSelectedBatch(batch);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      const message = axiosError.response?.data?.message || "Failed to fetch alumni records";
+      toast.error(message);
+    } finally {
+      setLoadingAll(false);
+    }
+  };
+
+  // Load batches when tab changes to database view
   useEffect(() => {
-    if (activeTab === "database" && allAlumni.length === 0) {
-      fetchAllAlumni(1);
+    if (activeTab === "database" && batches.length === 0) {
+      fetchBatches();
     }
   }, [activeTab]);
 
   const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      fetchAllAlumni(newPage);
+    if (newPage >= 1 && newPage <= totalPages && selectedBatch) {
+      fetchAlumniByBatch(selectedBatch, newPage);
     }
+  };
+
+  const handleBatchSelect = (batch: string) => {
+    setCurrentPage(1);
+    fetchAlumniByBatch(batch, 1);
+  };
+
+  const handleBackToBatches = () => {
+    setSelectedBatch(null);
+    setAllAlumni([]);
+    setTotalRecords(0);
+    setCurrentPage(1);
   };
 
   return (
@@ -388,114 +448,166 @@ const AlumniDatabase = () => {
           {/* Database View Tab */}
           <TabsContent value="database" className="mt-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">
-                    All Alumni Records
-                  </h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Showing {totalRecords} total records
-                  </p>
-                </div>
-                <Button
-                  onClick={() => fetchAllAlumni(currentPage)}
-                  variant="outline"
-                  disabled={loadingAll}
-                >
-                  {loadingAll ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Refresh"
-                  )}
-                </Button>
-              </div>
-
-              {loadingAll ? (
-                <div className="flex justify-center items-center py-16">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                </div>
-              ) : allAlumni.length === 0 ? (
-                <div className="text-center py-12">
-                  <Database className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 text-lg">No records found</p>
-                </div>
-              ) : (
+              {!selectedBatch ? (
+                // Batch Selection View
                 <>
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gray-50">
-                          <TableHead className="font-semibold">#</TableHead>
-                          <TableHead className="font-semibold">Name</TableHead>
-                          <TableHead className="font-semibold">Roll Number</TableHead>
-                          <TableHead className="font-semibold">Branch</TableHead>
-                          <TableHead className="font-semibold">Batch</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {allAlumni.map((alumni, index) => (
-                          <TableRow key={index} className="hover:bg-gray-50">
-                            <TableCell className="font-medium">
-                              {(currentPage - 1) * limit + index + 1}
-                            </TableCell>
-                            <TableCell>{alumni.name}</TableCell>
-                            <TableCell>{alumni.roll_no}</TableCell>
-                            <TableCell>{alumni.branch}</TableCell>
-                            <TableCell>{alumni.batch}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  <div className="mb-6">
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Select Batch Year
+                    </h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Choose a batch to view alumni records
+                    </p>
                   </div>
 
-                  {/* Pagination */}
-                  <div className="flex items-center justify-between mt-6">
-                    <div className="text-sm text-gray-600">
-                      Showing {(currentPage - 1) * limit + 1} to{" "}
-                      {Math.min(currentPage * limit, totalRecords)} of {totalRecords} records
+                  {loadingBatches ? (
+                    <div className="flex justify-center items-center py-16">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                     </div>
-                    <div className="flex gap-2">
+                  ) : batches.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Database className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 text-lg">No batches found</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                      {batches.map((batch) => (
+                        <Button
+                          key={batch}
+                          onClick={() => handleBatchSelect(batch)}
+                          variant="outline"
+                          className="h-24 flex flex-col items-center justify-center gap-2 hover:bg-blue-50 hover:border-blue-500 transition-all"
+                        >
+                          <Database className="h-6 w-6 text-blue-600" />
+                          <span className="text-2xl font-bold text-gray-900">{batch}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Alumni Table View
+                <>
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-3">
                       <Button
-                        onClick={() => handlePageChange(1)}
-                        disabled={currentPage === 1 || loadingAll}
+                        onClick={handleBackToBatches}
                         variant="outline"
                         size="sm"
                       >
-                        First
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Back
                       </Button>
-                      <Button
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage === 1 || loadingAll}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
-                      </Button>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">
-                          Page {currentPage} of {totalPages}
-                        </span>
+                      <div>
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          Batch {selectedBatch} Alumni
+                        </h2>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Showing {totalRecords} total records
+                        </p>
                       </div>
-                      <Button
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages || loadingAll}
-                        variant="outline"
-                        size="sm"
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={() => handlePageChange(totalPages)}
-                        disabled={currentPage === totalPages || loadingAll}
-                        variant="outline"
-                        size="sm"
-                      >
-                        Last
-                      </Button>
                     </div>
+                    <Button
+                      onClick={() => selectedBatch && fetchAlumniByBatch(selectedBatch, currentPage)}
+                      variant="outline"
+                      disabled={loadingAll}
+                    >
+                      {loadingAll ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Refresh"
+                      )}
+                    </Button>
                   </div>
+
+                  {loadingAll ? (
+                    <div className="flex justify-center items-center py-16">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                    </div>
+                  ) : allAlumni.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Database className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 text-lg">No records found</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50">
+                              <TableHead className="font-semibold">#</TableHead>
+                              <TableHead className="font-semibold">Name</TableHead>
+                              <TableHead className="font-semibold">Roll Number</TableHead>
+                              <TableHead className="font-semibold">Branch</TableHead>
+                              <TableHead className="font-semibold">Batch</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {allAlumni.map((alumni, index) => (
+                              <TableRow key={index} className="hover:bg-gray-50">
+                                <TableCell className="font-medium">
+                                  {(currentPage - 1) * limit + index + 1}
+                                </TableCell>
+                                <TableCell>{alumni.name}</TableCell>
+                                <TableCell>{alumni.roll_no}</TableCell>
+                                <TableCell>{alumni.branch}</TableCell>
+                                <TableCell>{alumni.batch}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Pagination */}
+                      <div className="flex items-center justify-between mt-6">
+                        <div className="text-sm text-gray-600">
+                          Showing {(currentPage - 1) * limit + 1} to{" "}
+                          {Math.min(currentPage * limit, totalRecords)} of {totalRecords} records
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handlePageChange(1)}
+                            disabled={currentPage === 1 || loadingAll}
+                            variant="outline"
+                            size="sm"
+                          >
+                            First
+                          </Button>
+                          <Button
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1 || loadingAll}
+                            variant="outline"
+                            size="sm"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-600">
+                              Page {currentPage} of {totalPages}
+                            </span>
+                          </div>
+                          <Button
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages || loadingAll}
+                            variant="outline"
+                            size="sm"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            onClick={() => handlePageChange(totalPages)}
+                            disabled={currentPage === totalPages || loadingAll}
+                            variant="outline"
+                            size="sm"
+                          >
+                            Last
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
