@@ -9,11 +9,11 @@ const uploadEventImage = require("../../config/eventImage.multer");
 // All routes are protected (admin only)
 router.get("/all", protectAdmin, eventController.getAllEvents);
 router.get("/pending", protectAdmin, eventController.getPendingEvents);
-router.get("/:eventId", protectAdmin, eventController.getEventById);
 router.post("/approve/:eventId", protectAdmin, eventController.approveEvent);
 router.post("/reject/:eventId", protectAdmin, eventController.rejectEvent);
 router.put("/update/:eventId", protectAdmin, uploadEventImage.single("event_image"), eventController.updateEvent);
-router.delete("/delete/:eventId", protectAdmin, eventController.deleteEvent);
+router.delete("/:eventId", protectAdmin, eventController.deleteEvent);
+router.get("/:eventId", protectAdmin, eventController.getEventById);
 
 // Create event as admin (auto-approved)
 router.post("/create", protectAdmin, uploadEventImage.single("event_image"), async (req, res) => {

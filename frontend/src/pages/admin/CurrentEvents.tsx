@@ -205,7 +205,7 @@ const CurrentEvents = () => {
 
     setDeleting(true);
     try {
-      await api.delete(`/admin/events/delete/${eventToDelete._id}`);
+      await api.delete(`/admin/events/${eventToDelete._id}`);
       alert("Event deleted successfully!");
       setDeleteDialogOpen(false);
       setEventToDelete(null);

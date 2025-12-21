@@ -142,3 +142,10 @@ dist
 
 .vscode
 backend/uploads/profile-pictures/undefined-1765377655469-409901738.png
+backend/uploads/event-images/event-1765789078490-547825255.png
+backend/uploads/event-images/event-1765789826801-214185714.png
+backend/uploads/event-images/event-1765869973749-463324203.png
+backend/uploads/event-images/event-1765869997806-745208728.png
+backend/uploads/event-images/event-1765870314933-760254150.png
+backend/uploads/event-images/event-1765892428146-611157522.png
+.gitignore
