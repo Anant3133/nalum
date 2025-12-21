@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { Event, getAllEvents } from "../../lib/adminApi";
-import { Calendar as CalendarIcon, Edit, Trash2, RefreshCw, Search, Filter } from "lucide-react";
+import { Calendar as CalendarIcon, Edit, Trash2, RefreshCw, Search, Filter, Eye } from "lucide-react";
 import api from "../../lib/api";
 import { BASE_URL } from "../../lib/constants";
 import { Button } from "../../components/ui/button";
@@ -58,6 +58,10 @@ const CurrentEvents = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Rejection Reason Dialog
+  const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
+  const [selectedReason, setSelectedReason] = useState<string>("");
 
   useEffect(() => {
     fetchEvents();
@@ -355,6 +359,18 @@ const CurrentEvents = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        {event.status === "rejected" && event.rejection_reason && (
+                          <Button
+                            onClick={() => {
+                              setSelectedReason(event.rejection_reason || "");
+                              setReasonDialogOpen(true);
+                            }}
+                            className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2"
+                          >
+                            <Eye size={16} className="mr-1" />
+                            Reason
+                          </Button>
+                        )}
                         <Button
                           onClick={() => handleEditClick(event)}
                           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2"
@@ -635,6 +651,31 @@ const CurrentEvents = () => {
                 className="flex-1 bg-red-600 hover:bg-red-700"
               >
                 {deleting ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rejection Reason Dialog */}
+        <Dialog open={reasonDialogOpen} onOpenChange={setReasonDialogOpen}>
+          <DialogContent className="bg-white max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-red-600">Rejection Reason</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                This event was rejected for the following reason:
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-gray-800 whitespace-pre-wrap">{selectedReason}</p>
+              </div>
+            </div>
+            <div className="flex justify-end mt-4">
+              <Button
+                onClick={() => setReasonDialogOpen(false)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Close
               </Button>
             </div>
           </DialogContent>

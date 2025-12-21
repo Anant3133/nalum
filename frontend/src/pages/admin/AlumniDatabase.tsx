@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Database, Search, Loader2, UserCheck, XCircle } from "lucide-react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Database, Search, Loader2, UserCheck, XCircle, List, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -23,7 +37,14 @@ interface VerificationMatch {
   roll_no: string;
   batch: string;
   branch: string;
-  similarity: number;
+  similarity?: number;
+}
+
+interface AlumniRecord {
+  name: string;
+  roll_no: string;
+  batch: string;
+  branch: string;
 }
 
 interface ApiErrorResponse {
@@ -32,6 +53,7 @@ interface ApiErrorResponse {
 
 const AlumniDatabase = () => {
   const { accessToken } = useAuth();
+  const [activeTab, setActiveTab] = useState("search");
   const [isLoading, setIsLoading] = useState(false);
   
   // Search state
@@ -41,6 +63,14 @@ const AlumniDatabase = () => {
   const [searchBranch, setSearchBranch] = useState("");
   const [matches, setMatches] = useState<VerificationMatch[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Database view state
+  const [allAlumni, setAllAlumni] = useState<AlumniRecord[]>([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [limit] = useState(50);
+  const totalPages = Math.ceil(totalRecords / limit);
 
   const handleDatabaseSearch = async () => {
     if (!searchName.trim() && !searchRollNo.trim() && !searchBatch.trim() && !searchBranch) {
@@ -99,6 +129,43 @@ const AlumniDatabase = () => {
     setHasSearched(false);
   };
 
+  // Fetch all alumni with pagination
+  const fetchAllAlumni = async (page: number) => {
+    setLoadingAll(true);
+    try {
+      const offset = (page - 1) * limit;
+      const response = await api.get("/admin/all-alumni", {
+        params: { limit, offset },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (response.data.success) {
+        setAllAlumni(response.data.matches || []);
+        setTotalRecords(response.data.total || 0);
+        setCurrentPage(page);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<ApiErrorResponse>;
+      const message = axiosError.response?.data?.message || "Failed to fetch alumni records";
+      toast.error(message);
+    } finally {
+      setLoadingAll(false);
+    }
+  };
+
+  // Load alumni when tab changes to database view
+  useEffect(() => {
+    if (activeTab === "database" && allAlumni.length === 0) {
+      fetchAllAlumni(1);
+    }
+  }, [activeTab]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      fetchAllAlumni(newPage);
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -107,15 +174,35 @@ const AlumniDatabase = () => {
           <div className="flex items-center gap-3 mb-2">
             <Database className="h-8 w-8 text-blue-600" />
             <h1 className="text-3xl font-bold text-gray-900">
-              Alumni Database Search
+              Alumni Database
             </h1>
           </div>
           <p className="text-gray-600">
-            Search through the college alumni database to verify records
+            Search or browse the college alumni database
           </p>
         </div>
 
-        {/* Search Form */}
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 h-12 bg-white border border-gray-200">
+            <TabsTrigger 
+              value="search"
+              className="flex items-center gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
+              <Search className="h-4 w-4" />
+              Search Alumni
+            </TabsTrigger>
+            <TabsTrigger 
+              value="database"
+              className="flex items-center gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+            >
+              <List className="h-4 w-4" />
+              Database View
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Search Alumni Tab */}
+          <TabsContent value="search" className="mt-6 space-y-6">{/* Search Form */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">
             Search Criteria
@@ -294,11 +381,126 @@ const AlumniDatabase = () => {
             <p>
               • Use this to verify alumni details when reviewing manual verification requests
             </p>
-            <p>
-              • The database may not include the most recent graduates - allow time for records to be updated
-            </p>
           </div>
         </div>
+          </TabsContent>
+
+          {/* Database View Tab */}
+          <TabsContent value="database" className="mt-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    All Alumni Records
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Showing {totalRecords} total records
+                  </p>
+                </div>
+                <Button
+                  onClick={() => fetchAllAlumni(currentPage)}
+                  variant="outline"
+                  disabled={loadingAll}
+                >
+                  {loadingAll ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Refresh"
+                  )}
+                </Button>
+              </div>
+
+              {loadingAll ? (
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                </div>
+              ) : allAlumni.length === 0 ? (
+                <div className="text-center py-12">
+                  <Database className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 text-lg">No records found</p>
+                </div>
+              ) : (
+                <>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead className="font-semibold">#</TableHead>
+                          <TableHead className="font-semibold">Name</TableHead>
+                          <TableHead className="font-semibold">Roll Number</TableHead>
+                          <TableHead className="font-semibold">Branch</TableHead>
+                          <TableHead className="font-semibold">Batch</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allAlumni.map((alumni, index) => (
+                          <TableRow key={index} className="hover:bg-gray-50">
+                            <TableCell className="font-medium">
+                              {(currentPage - 1) * limit + index + 1}
+                            </TableCell>
+                            <TableCell>{alumni.name}</TableCell>
+                            <TableCell>{alumni.roll_no}</TableCell>
+                            <TableCell>{alumni.branch}</TableCell>
+                            <TableCell>{alumni.batch}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-between mt-6">
+                    <div className="text-sm text-gray-600">
+                      Showing {(currentPage - 1) * limit + 1} to{" "}
+                      {Math.min(currentPage * limit, totalRecords)} of {totalRecords} records
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handlePageChange(1)}
+                        disabled={currentPage === 1 || loadingAll}
+                        variant="outline"
+                        size="sm"
+                      >
+                        First
+                      </Button>
+                      <Button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1 || loadingAll}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                      </div>
+                      <Button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages || loadingAll}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        onClick={() => handlePageChange(totalPages)}
+                        disabled={currentPage === totalPages || loadingAll}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Last
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </AdminLayout>
   );

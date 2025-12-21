@@ -51,6 +51,7 @@ interface Event {
   status: string;
   likes: number;
   createdAt: string;
+  rejection_reason?: string;
 }
 
 const HostEvent = () => {
@@ -76,13 +77,17 @@ const HostEvent = () => {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
   };
+  const [activeTab, setActiveTab] = useState("my-events");
   const [myEvents, setMyEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [currentEditingEvent, setCurrentEditingEvent] = useState<Event | null>(null);
   const [hostingAllowed, setHostingAllowed] = useState(true);
   const [checkingHosting, setCheckingHosting] = useState(true);
+  const [showReasonDialog, setShowReasonDialog] = useState(false);
+  const [selectedRejectionReason, setSelectedRejectionReason] = useState<string>("");
 
   const [formData, setFormData] = useState({
     title: "",
@@ -333,6 +338,24 @@ const HostEvent = () => {
     setEditDialogOpen(true);
   };
 
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm("Are you sure you want to delete this event? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeletingEventId(eventId);
+    try {
+      await api.delete(`/events/delete/${eventId}`);
+      toast.success("Event deleted successfully");
+      fetchMyEvents();
+    } catch (error: any) {
+      console.error("Failed to delete event:", error);
+      toast.error(error.response?.data?.message || "Failed to delete event");
+    } finally {
+      setDeletingEventId(null);
+    }
+  };
+
   const confirmEdit = async () => {
     if (!editingEvent) return;
     
@@ -454,26 +477,26 @@ const HostEvent = () => {
 
       {/* Show content only if hosting is allowed */}
       {hostingAllowed && (
-        <Tabs defaultValue="my-events" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 h-16 bg-white/5 border border-purple-500/30 backdrop-blur-md p-1.5 rounded-xl">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 h-14 bg-white/5 border border-white/20 backdrop-blur-md p-1 rounded-xl">
             <TabsTrigger 
               value="my-events"
-              className="flex items-center justify-center gap-2 text-base font-semibold text-gray-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-purple-500/50 hover:text-white transition-all duration-300 rounded-lg"
+              className="flex items-center justify-center gap-2 text-sm font-medium text-gray-400 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:text-white transition-all duration-200 rounded-lg"
             >
-              <List className="h-5 w-5" />
-              My Current Events
+              <List className="h-4 w-4" />
+              My Events
             </TabsTrigger>
             <TabsTrigger 
               value="create-event"
-              className="flex items-center justify-center gap-2 text-base font-semibold text-gray-400 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-blue-500/50 hover:text-white transition-all duration-300 rounded-lg"
+              className="flex items-center justify-center gap-2 text-sm font-medium text-gray-400 data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:text-white transition-all duration-200 rounded-lg"
             >
-              <Plus className="h-5 w-5" />
-              Create New Event
+              <Plus className="h-4 w-4" />
+              Create Event
             </TabsTrigger>
           </TabsList>
 
           {/* My Events Tab */}
-          <TabsContent value="my-events" className="mt-6 space-y-4">
+          <TabsContent value="my-events" className="mt-6 space-y-4 animate-in fade-in duration-300">
             {loadingEvents ? (
               <div className="flex justify-center items-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -483,7 +506,7 @@ const HostEvent = () => {
                 {myEvents.map((event) => (
                   <div
                     key={event._id}
-                    className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md hover:border-white/20 transition-all animate-in fade-in slide-in-from-bottom-4 duration-500"
+                    className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md hover:border-blue-500/30 transition-all duration-200"
                   >
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex-1">
@@ -507,14 +530,29 @@ const HostEvent = () => {
                       </div>
                       <div className="flex gap-2">
                         {event.status === "rejected" ? (
-                          <Button
-                            size="sm"
-                            onClick={() => loadEventForEdit(event)}
-                            className="bg-green-500 hover:bg-green-600 text-white"
-                          >
-                            <RefreshCw className="h-4 w-4 mr-1" />
-                            Reapply
-                          </Button>
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => loadEventForEdit(event)}
+                              className="bg-green-500 hover:bg-green-600 text-white"
+                            >
+                              <RefreshCw className="h-4 w-4 mr-1" />
+                              Reapply
+                            </Button>
+                            {event.rejection_reason && (
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedRejectionReason(event.rejection_reason || "");
+                                  setShowReasonDialog(true);
+                                }}
+                                className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                Reason
+                              </Button>
+                            )}
+                          </>
                         ) : (
                           <Button
                             size="sm"
@@ -524,6 +562,18 @@ const HostEvent = () => {
                             <Edit2 className="h-4 w-4" />
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          onClick={() => handleDeleteEvent(event._id)}
+                          disabled={deletingEventId === event._id}
+                          className="bg-red-500 hover:bg-red-600 text-white"
+                        >
+                          {deletingEventId === event._id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -537,10 +587,7 @@ const HostEvent = () => {
                   You haven't created any events yet. Get started by creating your first event!
                 </p>
                 <Button
-                  onClick={() => {
-                    const tabTrigger = document.querySelector('[value="create-event"]') as HTMLElement;
-                    tabTrigger?.click();
-                  }}
+                  onClick={() => setActiveTab("create-event")}
                   className="bg-blue-500 hover:bg-blue-600 text-white"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -551,8 +598,8 @@ const HostEvent = () => {
           </TabsContent>
 
           {/* Create Event Tab */}
-          <TabsContent value="create-event" className="mt-6">
-            <Card className="p-8 bg-white/5 border-white/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <TabsContent value="create-event" className="mt-6 animate-in fade-in duration-300">
+            <Card className="p-8 bg-white/5 border-white/10 backdrop-blur-md">
               <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information */}
               <div>
@@ -1065,6 +1112,31 @@ const HostEvent = () => {
                 )}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rejection Reason Dialog */}
+      <Dialog open={showReasonDialog} onOpenChange={setShowReasonDialog}>
+        <DialogContent className="bg-slate-900 border-white/10 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-400">Rejection Reason</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              This is why your event was rejected by the admin.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+              <p className="text-gray-200 whitespace-pre-wrap">{selectedRejectionReason}</p>
+            </div>
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button
+              onClick={() => setShowReasonDialog(false)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
